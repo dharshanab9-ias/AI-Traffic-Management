@@ -225,14 +225,12 @@ def root():
 
 async def frame_generator():
     """Generates continuous MJPEG video stream from the computer vision pipeline at smooth 25-30 FPS"""
-    last_frame = None
     while True:
         frame_bytes, _ = pipeline.get_stream_frame()
-        if frame_bytes and frame_bytes is not last_frame:
-            last_frame = frame_bytes
+        if frame_bytes:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        await asyncio.sleep(0.015)
+        await asyncio.sleep(0.035)
 
 @app.get("/api/video_feed")
 async def video_feed():
@@ -494,17 +492,15 @@ def select_feed(req: FeedSelectRequest):
     """Selects a feed respecting Live vs Footage mode constraints"""
     feed = req.feed_id
     if feed.startswith("http://") or feed.startswith("https://") or feed.startswith("rtsp://"):
-        res = pipeline.connect_live_stream(feed)
-        return {"message": f"Connected to live web surveillance stream: {feed}", "source": feed, "result": res}
+        success, msg = pipeline.connect_live_stream(feed)
+        return {"message": msg, "source": feed, "result": {"success": success, "message": msg}}
 
-    if "Live" in pipeline.mode_source:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot open recorded CCTV footage in Live Surveillance mode. Switch to Footage Mode to analyze recorded video files."
-        )
-
-    res = pipeline.start_footage_analysis(feed)
-    return {"message": f"Loaded recorded footage: {feed} (Single-Pass 1-Time Run)", "source": feed, "result": res}
+    if pipeline.operating_mode == "footage":
+        success, msg = pipeline.start_footage_analysis(feed)
+        return {"message": msg, "source": feed, "result": {"success": success, "message": msg}}
+    else:
+        success, msg = pipeline.load_camera_video(feed)
+        return {"message": msg, "source": feed, "result": {"success": success, "message": msg}}
 
 @app.post("/api/feed/upload")
 async def upload_video(file: UploadFile = File(...)):
@@ -525,18 +521,22 @@ def get_current_mode():
     return {
         "active_mode": "live" if "Live" in pipeline.mode_source else "footage",
         "mode_source": pipeline.mode_source,
-        "current_source": pipeline.custom_video_source or ("Standby Radar" if "Live" in pipeline.mode_source else "No Video Selected")
+        "current_source": pipeline.custom_video_source or ("Live Camera Stream" if "Live" in pipeline.mode_source else "No Video Selected")
     }
 
 @app.post("/api/mode/switch")
 def switch_system_mode(req: ModeSwitchRequest):
     """Switches the operating mode between Live Surveillance and Footage Upload"""
     if req.mode == "live":
-        pipeline.disconnect_live_stream()
-        log_event("INFO", "MODE_SWITCH", "Switched to Mode 1: Live Surveillance (Standby Radar).")
+        pipeline.operating_mode = "live"
+        pipeline.mode_source = "Live Surveillance"
+        pipeline.live_stream_active = True
+        if not pipeline.cap or not pipeline.cap.isOpened():
+            pipeline.load_camera_video("v1.mp4")
+        log_event("INFO", "MODE_SWITCH", "Switched to Mode 1: Live Surveillance.")
     else:
+        pipeline.operating_mode = "footage"
         pipeline.mode_source = "Footage Upload Analysis"
-        pipeline.is_live_stream = False
         log_event("INFO", "MODE_SWITCH", "Switched to Mode 2: Recorded Footage Repository & Analysis.")
     return {
         "status": "Mode Switched",

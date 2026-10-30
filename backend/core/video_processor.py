@@ -79,8 +79,8 @@ class VideoPipelineManager:
 
         # Operational Mode & Source State
         self.operating_mode = "live"  # "live" or "footage"
-        self.mode_source = "Live Surveillance"
-        self.live_stream_active = False
+        self.mode_source = "Live Surveillance (Node CAM-01)"
+        self.live_stream_active = True
         self.live_stream_url = ""
         self.footage_loaded = False
         self.analysis_in_progress = False
@@ -104,6 +104,15 @@ class VideoPipelineManager:
             "bus": 0, "truck": 0, "bicycle": 0, "pedestrian": 0, "child": 0
         }
         self.session_start_time = time.time()
+
+        # Load default video source so live demo runs immediately on any fresh clone
+        base_sample = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data")
+        default_v1 = os.path.join(base_sample, "v1.mp4")
+        if os.path.exists(default_v1):
+            self.cap = cv2.VideoCapture(default_v1)
+            self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+            self.custom_video_source = default_v1
+            print(f"[VideoPipeline] Default Junction Node Initialized: {default_v1} ({self.total_frames} frames)")
 
         self.io_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         self.stream_lock = threading.Lock()
@@ -132,7 +141,9 @@ class VideoPipelineManager:
                         self.latest_stream_jpeg = frame_bytes
                         self.latest_telemetry = telemetry
             except Exception as e:
-                pass
+                import traceback
+                print(f"[VideoPipeline Exception in Broadcaster]: {e}")
+                traceback.print_exc()
 
             dt = time.time() - t0
             time.sleep(max(0.005, 0.033 - dt))
@@ -220,6 +231,50 @@ class VideoPipelineManager:
             "status": "Active Live Stream" if self.live_stream_active else "Surveillance Standby (Awaiting Stream)",
             "uptime_seconds": round(time.time() - self.session_start_time, 1) if self.live_stream_active else 0.0
         }
+
+    def load_camera_video(self, video_filename_or_path: str = None) -> Tuple[bool, str]:
+        """Loads video and runs continuous surveillance analytics with auto-loop"""
+        base_sample = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample_data")
+        target_path = None
+
+        if video_filename_or_path:
+            candidates = [
+                video_filename_or_path,
+                os.path.join(base_sample, video_filename_or_path),
+                os.path.join(base_sample, os.path.basename(video_filename_or_path))
+            ]
+            for c in candidates:
+                if os.path.exists(c) and os.path.isfile(c):
+                    target_path = c
+                    break
+
+        if not target_path or not os.path.exists(target_path):
+            target_path = os.path.join(base_sample, "v1.mp4")
+
+        with self.cap_lock:
+            if self.cap:
+                self.cap.release()
+            if self.mjpeg_reader:
+                self.mjpeg_reader.stop()
+                self.mjpeg_reader = None
+
+            self.cap = cv2.VideoCapture(target_path)
+            if not self.cap.isOpened():
+                return False, f"Cannot open video file {target_path}"
+
+            self.operating_mode = "live"
+            self.mode_source = f"Live Surveillance ({os.path.basename(target_path)})"
+            self.live_stream_active = True
+            self.custom_video_source = target_path
+            self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+            self.frame_idx = 0
+            self.is_paused = False
+            self.analysis_complete = False
+            self.cached_detections = []
+            self.last_real_frame = None
+
+        print(f"[VideoPipeline] Live Camera Node Active: {target_path}")
+        return True, f"Live Camera Node active: {os.path.basename(target_path)}"
 
     # =========================================================================
     # FOOTAGE MODE: UPLOAD, 1-TIME PASS, PROGRESS & PAUSE CONTROLS
@@ -341,9 +396,9 @@ class VideoPipelineManager:
     # =========================================================================
     def _step_pipeline(self):
         """Runs one cycle of the computer vision pipeline respecting mode constraints"""
-        # 1. LIVE MODE STANDBY
+        # 1. LIVE MODE
         if self.operating_mode == "live":
-            if not self.live_stream_active:
+            if not self.live_stream_active and not self.cap and not self.mjpeg_reader:
                 standby = self._generate_standby_frame(
                     "LIVE SURVEILLANCE STANDBY",
                     "Awaiting Live Camera Connection (RTSP / HLS / MJPEG)",
@@ -395,7 +450,6 @@ class VideoPipelineManager:
                         if self.operating_mode == "footage":
                             self.analysis_complete = True
                             self.analysis_in_progress = False
-                            self.is_paused = True
                             print(f"[VideoPipeline] 1-Time Footage Analysis Reached EOF at Frame {self.frame_idx} of {self.total_frames}.")
                             if self.last_real_frame is not None:
                                 ret, jpeg = cv2.imencode('.jpg', self.last_real_frame, [cv2.IMWRITE_JPEG_QUALITY, 75])

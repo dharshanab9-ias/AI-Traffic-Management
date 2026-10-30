@@ -83,7 +83,7 @@ class ViolationDetector:
         signal = signal_states.get(lane_id, "GREEN")
         if signal == "RED" and "Signal Jumping" not in track["violations"] and "pedestrian" not in vclass:
             if len(track["trajectory"]) >= 2:
-                prev_cx, prev_cy = track["trajectory"][-2]
+                prev_cx, prev_cy = track["trajectory"][-2][:2]
                 crossed = False
                 if allowed_dir == "down" and prev_cy <= stop_line_y and cy > stop_line_y:
                     crossed = True

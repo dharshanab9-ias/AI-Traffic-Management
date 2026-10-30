@@ -851,6 +851,24 @@ export default function App() {
   // ==========================================
   // Mode 2: Footage Actions (1-Time Single Pass)
   // ==========================================
+  const handleSelectFeed = async (feedId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/feed/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feed_id: feedId })
+      });
+      if (res.ok) {
+        setActiveFeedId(feedId);
+        setFeedToast(`Connected to Camera Node: ${feedId}`);
+        setTimeout(() => setFeedToast(""), 4000);
+        await fetchLiveStatus();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleStartFootageAnalysis = async (filename) => {
     try {
       const res = await fetch(`${API_BASE}/api/footage/start`, {
@@ -860,8 +878,10 @@ export default function App() {
       });
       if (res.ok) {
         setActiveFeedId(filename);
-        setFeedToast(`Started 1-Time Forensic Analysis on ${filename}`);
+        setOperatingMode("footage");
+        setFeedToast(`Started Forensic Analysis on ${filename}`);
         setTimeout(() => setFeedToast(""), 4000);
+        setActiveTab("Dashboard");
         await fetchFootageStatus();
         await fetchCapturedPlates();
         await fetchFootageAuditReport();
@@ -883,10 +903,12 @@ export default function App() {
         body: formData
       });
       if (res.ok) {
-        setFeedToast(`Uploaded and Initiated 1-Time Analysis: ${file.name}`);
+        setFeedToast(`Uploaded and Initiated Analysis: ${file.name}`);
         setTimeout(() => setFeedToast(""), 4000);
         await fetchAvailableFeeds();
         setActiveFeedId(file.name);
+        setOperatingMode("footage");
+        setActiveTab("Dashboard");
         await fetchFootageStatus();
       } else {
         alert("Upload failed. Verify MP4 video format.");
@@ -1890,8 +1912,47 @@ export default function App() {
                   <img
                     src={`${API_BASE}/api/video_feed`}
                     alt="Traffic AI Feed"
+                    onError={(e) => {
+                      setTimeout(() => {
+                        e.target.src = `${API_BASE}/api/video_feed?t=${Date.now()}`;
+                      }, 1500);
+                    }}
                     style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                   />
+                </div>
+
+                {/* Quick Camera Grid Switcher */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', paddingTop: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>Camera Nodes:</span>
+                  {[
+                    { id: 'v1.mp4', label: 'CAM-01: Gandhipuram North' },
+                    { id: 'v2.mp4', label: 'CAM-02: Sector Beta' },
+                    { id: 'v3.mp4', label: 'CAM-03: City Junction' },
+                    { id: 'v5.mp4', label: 'CAM-05: Peelamedu' },
+                    { id: 'https://stream.aqi.in/live/03880002000614d3dbef.m3u8', label: 'CAM-07: Tiruppur Live' },
+                    { id: 'https://view.custardlev.uk/video_feed', label: 'CAM-08: UK CCTV' }
+                  ].map(cam => {
+                    const isSelected = activeFeedId === cam.id;
+                    return (
+                      <button
+                        key={cam.id}
+                        onClick={() => handleSelectFeed(cam.id)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          backgroundColor: isSelected ? '#0284c7' : '#f1f5f9',
+                          border: isSelected ? '1px solid #0284c7' : '1px solid var(--border-light)',
+                          color: isSelected ? '#ffffff' : '#334155',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {cam.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2072,6 +2133,11 @@ export default function App() {
                 <img
                   src={`${API_BASE}/api/video_feed`}
                   alt="Live Surveillance Stream"
+                  onError={(e) => {
+                    setTimeout(() => {
+                      e.target.src = `${API_BASE}/api/video_feed?t=${Date.now()}`;
+                    }, 1500);
+                  }}
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                 />
 
@@ -2262,22 +2328,10 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* SCREEN: VEHICLE & PEDESTRIAN CENSUS (Locked until analyzed in Footage)    */}
+        {/* SCREEN: VEHICLE & PEDESTRIAN CENSUS                                       */}
         {/* ========================================================================= */}
         {activeTab === "Traffic Analytics" && (
-          operatingMode === 'footage' && !hasFootageAnalyzed ? (
-            <div className="card" style={{ padding: '60px 40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-              <Lock size={44} color="#f59e0b" />
-              <h2 style={{ fontSize: '19px', fontWeight: 800, margin: 0 }}>Awaiting Footage Analysis</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '480px', margin: 0 }}>
-                Vehicle and pedestrian classification census is locked. Select a recorded clip from the Footage Repository to run the single-pass AI detection engine.
-              </p>
-              <button onClick={() => setActiveTab("Footage Repository")} className="btn-primary" style={{ marginTop: '8px' }}>
-                Open Footage Repository
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
@@ -2349,25 +2403,12 @@ export default function App() {
               </div>
 
             </div>
-          )
         )}
 
         {/* ========================================================================= */}
         {/* SCREEN: ANPR LEDGER & BLURRY PREDICTIVE OCR                               */}
         {/* ========================================================================= */}
         {activeTab === "ANPR Ledger" && (
-          operatingMode === 'footage' && !hasFootageAnalyzed ? (
-            <div className="card" style={{ padding: '60px 40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-              <Lock size={44} color="#f59e0b" />
-              <h2 style={{ fontSize: '19px', fontWeight: 800, margin: 0 }}>Awaiting Footage Analysis</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '480px', margin: 0 }}>
-                ANPR License Plate Ledger unlocks after analyzing a video clip from the repository.
-              </p>
-              <button onClick={() => setActiveTab("Footage Repository")} className="btn-primary" style={{ marginTop: '8px' }}>
-                Open Footage Repository
-              </button>
-            </div>
-          ) : (
             <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
@@ -2450,25 +2491,12 @@ export default function App() {
               </div>
 
             </div>
-          )
         )}
 
         {/* ========================================================================= */}
         {/* SCREEN: VIOLATIONS PROOF LEDGER                                           */}
         {/* ========================================================================= */}
         {activeTab === "Violations" && (
-          operatingMode === 'footage' && !hasFootageAnalyzed ? (
-            <div className="card" style={{ padding: '60px 40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-              <Lock size={44} color="#f59e0b" />
-              <h2 style={{ fontSize: '19px', fontWeight: 800, margin: 0 }}>Awaiting Footage Analysis</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '480px', margin: 0 }}>
-                Violations proof ledger unlocks after analyzing video footage.
-              </p>
-              <button onClick={() => setActiveTab("Footage Repository")} className="btn-primary" style={{ marginTop: '8px' }}>
-                Open Footage Repository
-              </button>
-            </div>
-          ) : (
             <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
@@ -2575,7 +2603,6 @@ export default function App() {
               </div>
 
             </div>
-          )
         )}
 
         {/* ========================================================================= */}
