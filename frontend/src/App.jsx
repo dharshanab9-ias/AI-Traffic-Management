@@ -1152,7 +1152,7 @@ export default function App() {
               backgroundColor: '#1e293b',
               border: '1px solid rgba(255, 255, 255, 0.08)'
             }}>
-              {timeStr}
+              {currentTime || new Date().toLocaleTimeString()}
             </div>
           </div>
         </header>
