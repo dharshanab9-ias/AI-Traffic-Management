@@ -69,7 +69,7 @@ class VideoPipelineManager:
         os.makedirs(self.challans_dir, exist_ok=True)
 
         # Core subsystems
-        self.detector = VehicleDetector(model_name="yolov8m.pt", conf_thresh=0.28)
+        self.detector = VehicleDetector(model_name="yolov8n.pt", conf_thresh=0.28)
         self.tracker = VehicleTracker(fps=25.0, px_to_meter=0.035)
         self.violation_detector = ViolationDetector(speed_limit_kmh=50.0)
         self.anpr = ANPREngine()
@@ -457,6 +457,8 @@ class VideoPipelineManager:
                             return None, self.last_stats
                         else:
                             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                            self.tracker.tracks.clear()
+                            self.tracker.disappeared.clear()
                             ret, cap_frame = self.cap.read()
                     if ret:
                         frame = cap_frame
@@ -476,12 +478,8 @@ class VideoPipelineManager:
 
         h, w = frame.shape[:2]
 
-        # Object Detection: Run downscaled YOLO every 3rd frame
-        if self.frame_idx % 3 == 0 or not self.cached_detections:
-            detections = self.detector.detect(frame)
-            self.cached_detections = detections
-        else:
-            detections = self.cached_detections
+        # Real-time multi-class object detection (YOLOv8 30+ FPS)
+        detections = self.detector.detect(frame)
 
         dynamic_lanes = [
             (int(0.12 * w), int(0.35 * w), 1),
@@ -638,6 +636,34 @@ class VideoPipelineManager:
         total_veh = sum(lane_counts.values())
         congestion_index = min(100.0, round((total_veh / 14.0) * 100, 1))
 
+        # Full census payload supporting both plural and singular keys
+        census_payload = {
+            "cars": self.vehicle_class_counts.get("car", 0),
+            "two_wheelers": self.vehicle_class_counts.get("two_wheeler", 0),
+            "auto_rickshaws": self.vehicle_class_counts.get("auto_rickshaw", 0),
+            "buses": self.vehicle_class_counts.get("bus", 0),
+            "trucks": self.vehicle_class_counts.get("truck", 0),
+            "bicycles": self.vehicle_class_counts.get("bicycle", 0),
+            "pedestrians": self.vehicle_class_counts.get("pedestrian", 0),
+            "children": self.vehicle_class_counts.get("child", 0),
+            "car": self.vehicle_class_counts.get("car", 0),
+            "two_wheeler": self.vehicle_class_counts.get("two_wheeler", 0),
+            "auto_rickshaw": self.vehicle_class_counts.get("auto_rickshaw", 0),
+            "bus": self.vehicle_class_counts.get("bus", 0),
+            "truck": self.vehicle_class_counts.get("truck", 0),
+            "bicycle": self.vehicle_class_counts.get("bicycle", 0),
+            "pedestrian": self.vehicle_class_counts.get("pedestrian", 0),
+            "child": self.vehicle_class_counts.get("child", 0)
+        }
+
+        total_unique = (
+            self.vehicle_class_counts.get("car", 0) +
+            self.vehicle_class_counts.get("two_wheeler", 0) +
+            self.vehicle_class_counts.get("auto_rickshaw", 0) +
+            self.vehicle_class_counts.get("bus", 0) +
+            self.vehicle_class_counts.get("truck", 0)
+        )
+
         telemetry = {
             "timestamp": datetime.utcnow().isoformat(),
             "frame_idx": self.frame_idx,
@@ -645,7 +671,8 @@ class VideoPipelineManager:
             "progress_pct": min(100.0, round((self.frame_idx / max(1, self.total_frames)) * 100, 1)) if "Footage" in self.mode_source else 100.0,
             "analysis_complete": self.analysis_complete,
             "total_vehicles": total_veh,
-            "vehicle_census": self.vehicle_class_counts.copy(),
+            "census_total": total_unique,
+            "vehicle_census": census_payload,
             "congestion_index": congestion_index,
             "lane_counts": lane_counts,
             "signal_state": signal_data,
@@ -660,13 +687,35 @@ class VideoPipelineManager:
         return jpeg.tobytes() if ret else None, telemetry
 
     def _render_hud(self, frame, active_tracks, signal_data, t_start):
+        CLASS_COLORS = {
+            "car": (255, 180, 0),           # Bright Sky Blue
+            "two_wheeler": (0, 140, 255),   # Vivid Amber / Orange
+            "auto_rickshaw": (0, 215, 255), # Auto Gold / Yellow
+            "bus": (255, 220, 60),          # Cyan
+            "truck": (220, 60, 200),        # Vivid Magenta
+            "bicycle": (100, 255, 200),     # Mint
+            "pedestrian": (60, 220, 80),    # Emerald Green
+            "child": (80, 240, 255),        # Amber Yellow
+        }
+
+        CLASS_LABELS = {
+            "car": "CAR",
+            "two_wheeler": "BIKE",
+            "auto_rickshaw": "AUTO",
+            "bus": "BUS",
+            "truck": "TRUCK",
+            "bicycle": "CYCLE",
+            "pedestrian": "PED",
+            "child": "CHILD",
+        }
+
         for tid, trk in active_tracks.items():
             x1, y1, x2, y2 = trk["bbox"]
-            vtype = trk["class_name"]
+            vtype = trk["class_name"].lower()
             speed = trk.get("speed_kmh", 0.0)
             has_viol = len(trk["violations"]) > 0
 
-            box_color = (0, 0, 255) if has_viol else ((255, 180, 0) if "child" in vtype else (0, 230, 100))
+            box_color = (0, 0, 255) if has_viol else CLASS_COLORS.get(vtype, (0, 230, 100))
             cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
 
             pts = trk["trajectory"]
@@ -676,10 +725,17 @@ class VideoPipelineManager:
                     p2 = (pts[i][0], pts[i][1])
                     cv2.line(frame, p1, p2, box_color, 2)
 
-            label = f"ID:{tid} {vtype.capitalize()} | {speed:.0f}km/h"
-            (lw, lh), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)
-            cv2.rectangle(frame, (x1, y1 - 18), (x1 + lw + 6, y1), box_color, -1)
-            cv2.putText(frame, label, (x1 + 3, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 0, 0), 1)
+            tag_prefix = CLASS_LABELS.get(vtype, vtype.upper())
+            viol_tag = " [VIOLATION]" if has_viol else ""
+            if "ped" in vtype or "child" in vtype:
+                label = f"{tag_prefix} #{tid}{viol_tag}"
+            else:
+                label = f"{tag_prefix} #{tid} | {speed:.0f}km/h{viol_tag}"
+
+            (lw, lh), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.44, 1)
+            cv2.rectangle(frame, (x1, y1 - 20), (x1 + lw + 8, y1), box_color, -1)
+            text_color = (255, 255, 255) if has_viol else (0, 0, 0)
+            cv2.putText(frame, label, (x1 + 4, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.44, text_color, 1)
 
         fps = 1.0 / max(0.001, time.time() - t_start)
         cv2.rectangle(frame, (10, 10), (450, 52), (20, 20, 20), -1)

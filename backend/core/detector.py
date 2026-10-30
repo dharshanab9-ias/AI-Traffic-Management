@@ -51,22 +51,21 @@ class VehicleDetector:
 
     def detect(self, frame):
         """
-        Runs object detection on a downscaled frame copy for maximum FPS,
-        then rescales detected coordinates back to original frame dimensions with
-        Indian vehicle, pedestrian, and child heuristic categorization.
-        Returns: list of dicts: {'bbox': [x1, y1, x2, y2], 'class_name': str, 'confidence': float, 'class_id': int}
+        Runs high-speed object detection directly on frame (1280x720) with YOLOv8.
+        Provides 1:1 pixel-accurate coordinate alignment and authentic Indian multi-class vehicle categorization:
+        - Car: Sedans, Hatchbacks, SUVs
+        - Two-Wheeler: Motorcycles, Scooters
+        - Auto-Rickshaw: 3-Wheeled commercial vehicles
+        - Bus: Transit buses, private coaches
+        - Truck: Heavy freight, haulers, cargo lorries
+        - Pedestrian: Vulnerable road users & school children
         """
         if frame is None:
             return []
 
-        orig_h, orig_w = frame.shape[:2]
-        infer_w, infer_h = 640, 360
-
-        small_frame = cv2.resize(frame, (infer_w, infer_h), interpolation=cv2.INTER_LINEAR)
-
         results = self.model.predict(
-            source=small_frame,
-            imgsz=480,
+            source=frame,
+            imgsz=640,
             conf=self.conf_thresh,
             device=self.device,
             verbose=False,
@@ -76,40 +75,46 @@ class VehicleDetector:
         detections = []
         if not results:
             return detections
-            
-        scale_x = orig_w / infer_w
-        scale_y = orig_h / infer_h
 
         for r in results:
             boxes = r.boxes
             for box in boxes:
                 cls_id = int(box.cls[0].item())
                 conf = float(box.conf[0].item())
-                s_coords = box.xyxy[0].cpu().numpy().astype(float).tolist()
+                s_coords = box.xyxy[0].cpu().numpy().astype(int).tolist()
 
-                x1 = int(s_coords[0] * scale_x)
-                y1 = int(s_coords[1] * scale_y)
-                x2 = int(s_coords[2] * scale_x)
-                y2 = int(s_coords[3] * scale_y)
-                coords = [x1, y1, x2, y2]
-                
-                class_name = TARGET_CLASSES.get(cls_id, "vehicle")
-                bw = x2 - x1
-                bh = y2 - y1
-                aspect_ratio = bw / max(1, bh)
+                x1, y1, x2, y2 = s_coords[0], s_coords[1], s_coords[2], s_coords[3]
+                bw = max(1, x2 - x1)
+                bh = max(1, y2 - y1)
+                aspect_ratio = bw / float(bh)
+                area = bw * bh
 
-                # Heuristics:
-                if class_name == "car" and 0.8 <= aspect_ratio <= 1.35 and 2000 < (bw * bh) < 14000:
-                    class_name = "auto_rickshaw"
-                elif class_name == "motorcycle":
+                # Authentic COCO & Indian Traffic Categorization
+                if cls_id == 2:
+                    # Car: Check for compact upright 3-wheeler profile (Auto-Rickshaw)
+                    if 0.75 <= aspect_ratio <= 1.05 and 1500 < area < 7500:
+                        class_name = "auto_rickshaw"
+                    else:
+                        class_name = "car"
+                elif cls_id == 3:
                     class_name = "two_wheeler"
-                elif class_name == "pedestrian":
-                    # Distinguish children / young students: height < 48px or smaller relative footprint
-                    if bh < 48 or (aspect_ratio > 0.55 and bh < 62):
+                elif cls_id == 5:
+                    class_name = "bus"
+                elif cls_id == 7:
+                    class_name = "truck"
+                elif cls_id == 1:
+                    class_name = "bicycle"
+                elif cls_id == 0:
+                    # Distinguish school-age children by relative height
+                    if bh < 44 or (aspect_ratio > 0.60 and bh < 58):
                         class_name = "child"
+                    else:
+                        class_name = "pedestrian"
+                else:
+                    class_name = "car"
 
                 detections.append({
-                    "bbox": coords,
+                    "bbox": [x1, y1, x2, y2],
                     "class_name": class_name,
                     "confidence": round(conf, 3),
                     "class_id": cls_id

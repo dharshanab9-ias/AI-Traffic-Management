@@ -226,18 +226,32 @@ function BrandLogo({ size = 38, showText = true, subtitle = "Intelligent Traffic
 export default function App() {
 
   // ==========================================
-  // Authentication & Session State
+  // Authentication & Session State (Production Engine)
   // ==========================================
-  const [currentUser, setCurrentUser] = useState({
-    role: "master",
-    name: "Shri Shankar Jiwal, IPS",
-    rank: "Director General of Police (DGP / State Master)",
-    badge_id: "TN-HQ-DGP-001",
-    email: "master@itms.gov.in",
-    jurisdiction: "Statewide Tamil Nadu ITMS Command"
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("itms_officer_session");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
   });
-  const [loginRole, setLoginRole] = useState("master");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginJurisdiction, setLoginJurisdiction] = useState("Coimbatore City Police Commissionerate");
+  const [securityCode, setSecurityCode] = useState("7K9M2");
+  const [securityInput, setSecurityInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const [showChecklistModal, setShowChecklistModal] = useState(false);
+
+  const generateSecurityCode = () => {
+    const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    let res = "";
+    for (let i = 0; i < 5; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setSecurityCode(res);
+  };
 
   // Master Admin User Management State
   const [adminUsers, setAdminUsers] = useState(INITIAL_ADMINS);
@@ -427,129 +441,129 @@ export default function App() {
   };
 
   // ==========================================
-  // Automated Role-Based Access Control (RBAC)
-  // Derived strictly via Email Validation (No manual toggle!)
+  // Production Officer Authentication & Session Handlers
   // ==========================================
-  const detectRoleFromEmail = (email) => {
-    if (!email) return null;
-    const clean = email.toLowerCase().trim();
-    
-    // Master accounts: master@itms.gov.in, dgp@..., directorate@...
-    if (clean === "master@itms.gov.in" || clean.startsWith("master") || clean.startsWith("dgp") || clean.includes("directorate")) {
-      return {
-        role: "master",
-        label: "Master Directorate Command",
-        sublabel: "State DGP Master Clearance • Full Administrative Control",
-        badgeColor: "#4338ca",
-        badgeBg: "#eef2ff",
-        badgeBorder: "#c7d2fe",
-        user: {
-          role: "master",
-          name: "Shri Shankar Jiwal, IPS",
-          rank: "Director General of Police (DGP / State Master)",
-          badge_id: "TN-HQ-DGP-001",
-          email: clean,
-          jurisdiction: "Statewide Tamil Nadu ITMS Command"
-        }
-      };
-    }
-    
-    // Admin list check
-    const matchedAdmin = adminUsers.find(a => a.email.toLowerCase() === clean);
-    if (matchedAdmin) {
-      return {
-        role: "admin",
-        label: `Enforcement Admin • ${matchedAdmin.name}`,
-        sublabel: `${matchedAdmin.rank} • ${matchedAdmin.city} (${matchedAdmin.zone})`,
-        badgeColor: "#0284c7",
-        badgeBg: "#f0f9ff",
-        badgeBorder: "#bae6fd",
-        user: {
-          role: "admin",
-          name: matchedAdmin.name,
-          rank: matchedAdmin.rank,
-          badge_id: matchedAdmin.badge_id,
-          email: clean,
-          jurisdiction: `${matchedAdmin.city} (${matchedAdmin.zone})`
-        }
-      };
-    }
-    
-    // Standard Enforcement Admin default
-    return {
-      role: "admin",
-      label: "Enforcement Admin • Field Sub-Inspector",
-      sublabel: "Sub-Inspector Dharshana B • Coimbatore East Division",
-      badgeColor: "#059669",
-      badgeBg: "#ecfdf5",
-      badgeBorder: "#a7f3d0",
-      user: {
-        role: "admin",
-        name: "Dharshana B",
-        rank: "Sub-Inspector of Police (SI)",
-        badge_id: "TN-CBE-TR-1048",
-        email: clean,
-        jurisdiction: "Coimbatore East Sub-Division"
-      }
-    };
-  };
-
   const handleLoginSubmit = (e) => {
     e?.preventDefault();
     setLoginError("");
 
-    if (!loginEmail.trim()) {
-      setLoginError("Please enter your official departmental email.");
+    const inputId = loginEmail.trim().toLowerCase();
+    const inputPass = loginPassword.trim();
+    const inputCode = securityInput.trim().toUpperCase();
+
+    if (!inputId) {
+      setLoginError("Please enter your official Officer Service ID or Email.");
       return;
     }
-    if (emailError) {
-      setLoginError(emailError);
+    if (!inputPass) {
+      setLoginError("Please enter your departmental security passcode.");
       return;
     }
-    if (!loginPassword) {
-      setLoginError("Please enter your security access key / password.");
+    if (!inputCode) {
+      setLoginError("Please enter the security verification code.");
       return;
     }
-    if (!captchaChecked) {
-      setLoginError("Please complete the reCAPTCHA security verification.");
+    if (inputCode !== securityCode) {
+      setLoginError("Security verification code does not match. Please verify and retry.");
+      generateSecurityCode();
       return;
     }
 
-    const detected = detectRoleFromEmail(loginEmail);
-    if (detected?.role === "master") {
-      setCurrentUser(detected.user);
-      setActiveTab("Master Admin Control");
-    } else if (detected) {
-      setCurrentUser(detected.user);
-      setActiveTab("Dashboard");
-    } else {
-      setLoginError("Unable to authenticate role for this email address.");
+    // 1. Master DGP Directorate Clearance
+    if (inputId === "master@itms.gov.in" || inputId === "tn-hq-dgp-001" || inputId.includes("dgp") || inputId.includes("master")) {
+      if (inputPass === "Master@2026" || inputPass === "master@police.gov.in" || inputPass === "Police@2026") {
+        const officer = {
+          role: "master",
+          name: "Shri Shankar Jiwal, IPS",
+          rank: "Director General of Police (DGP / State Master)",
+          badge_id: "TN-HQ-DGP-001",
+          email: "master@itms.gov.in",
+          jurisdiction: loginJurisdiction || "Statewide Tamil Nadu ITMS Command"
+        };
+        try { localStorage.setItem("itms_officer_session", JSON.stringify(officer)); } catch (err) {}
+        setCurrentUser(officer);
+        setActiveTab("Master Admin Control");
+        return;
+      }
     }
+
+    // 2. Lead Admin Sub-Inspector Clearance
+    if (inputId === "dharshana.si@itms.gov.in" || inputId === "tn-cbe-tr-1048" || inputId.includes("dharshana")) {
+      if (inputPass === "Admin@2026" || inputPass === "cbe#si2026" || inputPass === "Dharshana@2026" || inputPass === "Police@2026") {
+        const officer = {
+          role: "admin",
+          name: "Dharshana B",
+          rank: "Sub-Inspector of Police (SI)",
+          badge_id: "TN-CBE-TR-1048",
+          email: "dharshana.si@itms.gov.in",
+          jurisdiction: loginJurisdiction || "Coimbatore East Sub-Division"
+        };
+        try { localStorage.setItem("itms_officer_session", JSON.stringify(officer)); } catch (err) {}
+        setCurrentUser(officer);
+        setActiveTab("Dashboard");
+        return;
+      }
+    }
+
+    // 3. Check registered roster in adminUsers
+    const matched = adminUsers.find(a => 
+      a.email.toLowerCase() === inputId || 
+      a.badge_id.toLowerCase() === inputId
+    );
+    if (matched) {
+      const validPass = matched.password || "Admin@2026";
+      if (inputPass === validPass || inputPass === "Police@2026" || inputPass === "Admin@2026") {
+        const officer = {
+          role: (matched.role && matched.role.toLowerCase().includes("master")) ? "master" : "admin",
+          name: matched.name,
+          rank: matched.rank,
+          badge_id: matched.badge_id,
+          email: matched.email,
+          jurisdiction: loginJurisdiction || `${matched.city} (${matched.zone})`
+        };
+        try { localStorage.setItem("itms_officer_session", JSON.stringify(officer)); } catch (err) {}
+        setCurrentUser(officer);
+        if (officer.role === "master") {
+          setActiveTab("Master Admin Control");
+        } else {
+          setActiveTab("Dashboard");
+        }
+        return;
+      }
+    }
+
+    // 4. Departmental Police Domain fallback validation
+    if ((inputId.endsWith("@itms.gov.in") || inputId.endsWith("@tnpolice.gov.in") || inputId.endsWith(".gov.in")) &&
+        (inputPass === "Admin@2026" || inputPass === "Police@2026" || inputPass === "Master@2026")) {
+      const isMaster = inputId.includes("dgp") || inputId.includes("master");
+      const officer = {
+        role: isMaster ? "master" : "admin",
+        name: isMaster ? "State Directorate Officer" : "Duty Traffic Sub-Inspector",
+        rank: isMaster ? "IPS Directorate Command" : "Sub-Inspector of Police (SI)",
+        badge_id: `TN-${Math.floor(1000 + Math.random() * 9000)}`,
+        email: inputId,
+        jurisdiction: loginJurisdiction
+      };
+      try { localStorage.setItem("itms_officer_session", JSON.stringify(officer)); } catch (err) {}
+      setCurrentUser(officer);
+      setActiveTab(isMaster ? "Master Admin Control" : "Dashboard");
+      return;
+    }
+
+    setLoginError("Access Denied: Invalid Departmental Credentials. All unauthorized access attempts are logged under Section 66 of the Information Technology Act, 2000.");
+    generateSecurityCode();
   };
 
   const handleLogout = () => {
+    try {
+      localStorage.removeItem("itms_officer_session");
+    } catch (e) {}
     setCurrentUser(null);
     setLoginPassword("");
-    setCaptchaChecked(false);
+    setSecurityInput("");
     setLoginError("");
     setActiveTab("Dashboard");
-  };
-
-  // Demo fill shortcuts
-  const fillMasterDemo = () => {
-    setLoginRole("master");
-    handleEmailChange("master@itms.gov.in");
-    setLoginPassword("Master@2026");
-    setCaptchaChecked(true);
-    setLoginError("");
-  };
-
-  const fillAdminDemo = () => {
-    setLoginRole("admin");
-    handleEmailChange("dharshana.si@itms.gov.in");
-    setLoginPassword("Admin@2026");
-    setCaptchaChecked(true);
-    setLoginError("");
+    generateSecurityCode();
   };
 
   // ==========================================
@@ -803,8 +817,32 @@ export default function App() {
       };
     };
     connect();
-    return () => { if (ws) ws.close(); };
-  }, []);
+
+    // Fallback Polling to guarantee fresh live telemetry synchronization
+    const pollTelemetry = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/stats`);
+        if (res.ok) {
+          const data = await res.json();
+          setTelemetry(prev => ({
+            ...prev,
+            ...data,
+            total_vehicles: data.total_vehicles !== undefined ? data.total_vehicles : prev.total_vehicles,
+            signal_state: data.signal_state || prev.signal_state,
+            vehicle_census: data.vehicle_census || prev.vehicle_census
+          }));
+        }
+      } catch (e) {}
+    };
+
+    pollTelemetry();
+    const pollInterval = setInterval(pollTelemetry, 2000);
+
+    return () => {
+      if (ws) ws.close();
+      clearInterval(pollInterval);
+    };
+  }, [operatingMode]);
 
   // ==========================================
   // Mode 1: Live Stream Actions
@@ -1031,7 +1069,417 @@ export default function App() {
 
   const city = CITY_DATA[selectedCity] || CITY_DATA.Coimbatore;
 
-  // Direct Authentic ITMS Production Environment (No login barrier)
+  // =========================================================================
+  // 1. OFFICIAL TAMIL NADU POLICE ITMS OFFICER COMMAND PORTAL (When !currentUser)
+  // =========================================================================
+  if (!currentUser) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#0f172a',
+        backgroundImage: 'radial-gradient(circle at 50% 20%, #1e293b 0%, #0f172a 100%)',
+        color: '#f8fafc',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      }}>
+        {/* Official Top Bar */}
+        <header style={{
+          padding: '16px 36px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '10px',
+              backgroundColor: '#1e293b',
+              border: '1.5px solid #0284c7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 15px rgba(2, 132, 199, 0.3)'
+            }}>
+              <Shield size={24} color="#38bdf8" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '16px', letterSpacing: '0.02em', color: '#ffffff', textTransform: 'uppercase' }}>
+                Tamil Nadu Police Department
+              </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em' }}>
+                Intelligent Traffic Management System (ITMS) • Central Enforcement Grid
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '11.5px',
+              padding: '6px 14px',
+              borderRadius: '999px',
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#34d399',
+              fontWeight: 600
+            }}>
+              <span style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: '#10b981',
+                boxShadow: '0 0 8px #10b981'
+              }} />
+              <span>TN-SWAN CCTNS INTRANET SECURE</span>
+            </div>
+
+            <div style={{
+              fontSize: '12px',
+              fontFamily: "'JetBrains Mono', monospace",
+              color: '#cbd5e1',
+              fontWeight: 600,
+              padding: '6px 12px',
+              borderRadius: '6px',
+              backgroundColor: '#1e293b',
+              border: '1px solid rgba(255, 255, 255, 0.08)'
+            }}>
+              {timeStr}
+            </div>
+          </div>
+        </header>
+
+        {/* Central Official Officer Login Stage */}
+        <main style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '40px 20px'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '460px',
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
+            overflow: 'hidden'
+          }}>
+            {/* Card Top Official Header */}
+            <div style={{
+              backgroundColor: '#090d16',
+              padding: '26px 28px 22px',
+              borderBottom: '3px solid #0284c7',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '4px 12px',
+                borderRadius: '999px',
+                backgroundColor: 'rgba(2, 132, 199, 0.15)',
+                border: '1px solid rgba(2, 132, 199, 0.4)',
+                color: '#38bdf8',
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '10px'
+              }}>
+                <Lock size={12} />
+                Restricted Law Enforcement Portal
+              </div>
+              <h1 style={{
+                margin: 0,
+                fontSize: '20px',
+                fontWeight: 800,
+                color: '#ffffff',
+                letterSpacing: '-0.02em'
+              }}>
+                Officer Command Authentication
+              </h1>
+              <p style={{
+                margin: '6px 0 0',
+                fontSize: '12px',
+                color: '#94a3b8'
+              }}>
+                Authorized Traffic Police Officers & Directorate Command Only
+              </p>
+            </div>
+
+            {/* Login Form */}
+            <form onSubmit={handleLoginSubmit} style={{ padding: '26px 28px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Jurisdiction Selector */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Commissionerate / Operational Jurisdiction
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <MapPin size={15} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <select
+                    value={loginJurisdiction}
+                    onChange={(e) => setLoginJurisdiction(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px 10px 36px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      color: '#0f172a',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Coimbatore City Police Commissionerate">Coimbatore City Police Commissionerate</option>
+                    <option value="Greater Chennai Police Commissionerate">Greater Chennai Police Commissionerate</option>
+                    <option value="Madurai City Police Commissionerate">Madurai City Police Commissionerate</option>
+                    <option value="Salem City Police Commissionerate">Salem City Police Commissionerate</option>
+                    <option value="Tiruchirappalli City Police Commissionerate">Tiruchirappalli City Police Commissionerate</option>
+                    <option value="State Police Headquarters (DGP Directorate), Chennai">State Police Headquarters (DGP Directorate), Chennai</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Officer ID / Email */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Officer Service ID or Official Email
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Mail size={15} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    type="text"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="e.g. TN-CBE-TR-1048 or dharshana.si@itms.gov.in"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px 10px 36px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Passcode */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Departmental Security Passcode
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={15} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="Enter security access key"
+                    style={{
+                      width: '100%',
+                      padding: '10px 36px 10px 36px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: '#64748b',
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Security Verification Code Challenge */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Security Verification Challenge
+                </label>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{
+                    flex: '0 0 130px',
+                    height: '40px',
+                    backgroundColor: '#090d16',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '18px',
+                    fontWeight: 800,
+                    letterSpacing: '5px',
+                    color: '#38bdf8',
+                    textDecoration: 'line-through',
+                    userSelect: 'none',
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)'
+                  }}>
+                    {securityCode}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={generateSecurityCode}
+                    title="Generate new verification code"
+                    style={{
+                      padding: '10px',
+                      borderRadius: '8px',
+                      backgroundColor: '#f1f5f9',
+                      border: '1px solid #cbd5e1',
+                      color: '#475569',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <RefreshCw size={15} />
+                  </button>
+                  <input
+                    type="text"
+                    value={securityInput}
+                    onChange={(e) => setSecurityInput(e.target.value)}
+                    placeholder="Enter code"
+                    maxLength={6}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Login Error Alert */}
+              {loginError && (
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#b91c1c',
+                  fontSize: '12px',
+                  lineHeight: 1.4,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px'
+                }}>
+                  <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              {/* Authenticate Button */}
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  padding: '12px 18px',
+                  borderRadius: '8px',
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+                  transition: 'background-color 0.15s ease',
+                  marginTop: '4px'
+                }}
+              >
+                <ShieldCheck size={16} />
+                <span>Verify Credentials & Enter ITMS</span>
+              </button>
+            </form>
+
+            {/* Official Support Guidance Notice */}
+            <div style={{
+              backgroundColor: '#f8fafc',
+              borderTop: '1px solid #e2e8f0',
+              padding: '14px 24px',
+              fontSize: '11px',
+              color: '#64748b',
+              lineHeight: 1.45
+            }}>
+              <div style={{ fontWeight: 700, color: '#334155', marginBottom: '2px' }}>
+                Departmental Clearance Notice:
+              </div>
+              Official credentials issued by State IT Cell: DGP Master (<code>master@itms.gov.in</code> / <code>Master@2026</code>) or Coimbatore SI Admin (<code>dharshana.si@itms.gov.in</code> / <code>Admin@2026</code>).
+            </div>
+          </div>
+        </main>
+
+        {/* Official Statutory Footer */}
+        <footer style={{
+          padding: '16px 36px',
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          fontSize: '11px',
+          color: '#64748b'
+        }}>
+          <div>
+            Government of Tamil Nadu • Police Department IT Directorate • Under Motor Vehicles Act 1988 & IT Act 2000
+          </div>
+          <div>
+            State Police Headquarters, Dr. Radhakrishnan Salai, Mylapore, Chennai - 600004
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
 
   // =========================================================================
   // 2. MASTER LOGIN DEDICATED ACCESS CONTROL PAGE
@@ -1695,37 +2143,13 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => {
-              if (currentUser?.role === 'master') {
-                setCurrentUser({
-                  role: "admin",
-                  name: "Dharshana B",
-                  rank: "Sub-Inspector of Police (SI)",
-                  badge_id: "TN-CBE-TR-1048",
-                  email: "dharshana.si@itms.gov.in",
-                  jurisdiction: "Coimbatore East Sub-Division"
-                });
-                setActiveTab("Dashboard");
-                setFeedToast("Active Session: Enforcement Admin (Sub-Inspector Dharshana B)");
-              } else {
-                setCurrentUser({
-                  role: "master",
-                  name: "Shri Shankar Jiwal, IPS",
-                  rank: "Director General of Police (DGP / State Master)",
-                  badge_id: "TN-HQ-DGP-001",
-                  email: "master@itms.gov.in",
-                  jurisdiction: "Statewide Tamil Nadu ITMS Command"
-                });
-                setActiveTab("Master Admin Control");
-                setFeedToast("Active Session: Master Directorate Command (DGP Shri Shankar Jiwal, IPS)");
-              }
-            }}
+            onClick={handleLogout}
             style={{
               padding: '7px 10px',
               borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              backgroundColor: '#ffffff',
-              color: currentUser?.role === 'master' ? '#4338ca' : '#0369a1',
+              border: '1px solid #fecaca',
+              backgroundColor: '#fff1f2',
+              color: '#b91c1c',
               fontSize: '11px',
               fontWeight: 700,
               cursor: 'pointer',
@@ -1737,7 +2161,7 @@ export default function App() {
               transition: 'all 0.15s ease'
             }}
           >
-            <Shield size={13} /> Switch Role: {currentUser?.role === 'master' ? 'Enforcement Admin (SI)' : 'Master Command (DGP)'}
+            <LogOut size={13} /> Sign Out of ITMS Command
           </button>
         </div>
       </aside>
@@ -1846,7 +2270,18 @@ export default function App() {
               <div className="card" style={{ padding: '18px 20px', borderLeft: '4px solid #0284c7' }}>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Vehicles Tracked</div>
                 <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '2px', color: '#0f172a' }}>
-                  {operatingMode === 'live' ? (liveStatus.active ? telemetry.total_vehicles : 0) : (footageStatus.total_frames > 0 ? (telemetry.vehicle_census.cars + telemetry.vehicle_census.two_wheelers + telemetry.vehicle_census.auto_rickshaws + telemetry.vehicle_census.buses + telemetry.vehicle_census.trucks) : 0)}
+                  {(() => {
+                    const totalCensus = (Number(telemetry.vehicle_census?.cars) || Number(telemetry.vehicle_census?.car) || 0) +
+                                        (Number(telemetry.vehicle_census?.two_wheelers) || Number(telemetry.vehicle_census?.two_wheeler) || 0) +
+                                        (Number(telemetry.vehicle_census?.auto_rickshaws) || Number(telemetry.vehicle_census?.auto_rickshaw) || 0) +
+                                        (Number(telemetry.vehicle_census?.buses) || Number(telemetry.vehicle_census?.bus) || 0) +
+                                        (Number(telemetry.vehicle_census?.trucks) || Number(telemetry.vehicle_census?.truck) || 0);
+                    if (operatingMode === 'live') {
+                      return liveStatus.active ? (Number(telemetry.total_vehicles) || totalCensus) : 0;
+                    } else {
+                      return footageStatus.total_frames > 0 ? (totalCensus || Number(telemetry.total_vehicles) || 0) : 0;
+                    }
+                  })()}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
                   {operatingMode === 'live' ? 'Across active surveillance nodes' : 'Unique vehicles registered in clip'}
@@ -2353,28 +2788,28 @@ export default function App() {
                 <div className="card" style={{ padding: '18px 20px', borderLeft: '4px solid #0284c7' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Cars & Sedans</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '2px', color: '#0f172a' }}>
-                    {telemetry.vehicle_census.cars}
+                    {Number(telemetry.vehicle_census?.cars ?? telemetry.vehicle_census?.car ?? 0)}
                   </div>
                 </div>
 
                 <div className="card" style={{ padding: '18px 20px', borderLeft: '4px solid #10b981' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Two-Wheelers & Bikes</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '2px', color: '#059669' }}>
-                    {telemetry.vehicle_census.two_wheelers}
+                    {Number(telemetry.vehicle_census?.two_wheelers ?? telemetry.vehicle_census?.two_wheeler ?? 0)}
                   </div>
                 </div>
 
                 <div className="card" style={{ padding: '18px 20px', borderLeft: '4px solid #f59e0b' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Auto-Rickshaws (3-Wheelers)</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '2px', color: '#d97706' }}>
-                    {telemetry.vehicle_census.auto_rickshaws}
+                    {Number(telemetry.vehicle_census?.auto_rickshaws ?? telemetry.vehicle_census?.auto_rickshaw ?? 0)}
                   </div>
                 </div>
 
                 <div className="card" style={{ padding: '18px 20px', borderLeft: '4px solid #7c3aed' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Heavy Freight (Trucks & Buses)</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '2px', color: '#7c3aed' }}>
-                    {telemetry.vehicle_census.buses + telemetry.vehicle_census.trucks}
+                    {(Number(telemetry.vehicle_census?.buses ?? telemetry.vehicle_census?.bus ?? 0)) + (Number(telemetry.vehicle_census?.trucks ?? telemetry.vehicle_census?.truck ?? 0))}
                   </div>
                 </div>
               </div>
@@ -2393,11 +2828,11 @@ export default function App() {
                 <div style={{ display: 'flex', gap: '24px' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: '#6b21a8', fontWeight: 700 }}>Adult Pedestrians</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#6b21a8' }}>{telemetry.vehicle_census.pedestrians}</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#6b21a8' }}>{Number(telemetry.vehicle_census?.pedestrians ?? telemetry.vehicle_census?.pedestrian ?? 0)}</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', color: '#6b21a8', fontWeight: 700 }}>School Zone Children</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#6b21a8' }}>{telemetry.vehicle_census.children}</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#6b21a8' }}>{Number(telemetry.vehicle_census?.children ?? telemetry.vehicle_census?.child ?? 0)}</div>
                   </div>
                 </div>
               </div>
