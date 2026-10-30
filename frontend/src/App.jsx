@@ -75,8 +75,10 @@ import {
   Server
 } from 'lucide-react';
 
-const API_BASE = "http://localhost:8005";
-const WS_URL = "ws://localhost:8005/ws/telemetry";
+// Dynamic Cloud & Local API Endpoint Configuration
+const ENV_API = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
+const API_BASE = ENV_API || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? `${window.location.protocol}//${window.location.hostname}:8005` : "http://localhost:8005");
+const WS_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_WS_URL) || (API_BASE.replace(/^http/, 'ws') + "/ws/telemetry");
 
 // City Data Configurations for Coimbatore and Chennai
 const CITY_DATA = {
