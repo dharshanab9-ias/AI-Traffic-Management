@@ -65,23 +65,24 @@ An end-to-end computer vision and intelligent urban traffic control platform des
 
 ## Quick Start Guide
 
-### Option A: One-Click Launch (Windows)
-Double-click:
-```bat
-start_all.bat
-```
-This automatically launches both the FastAPI backend and the React frontend in separate command windows.
+### Option A: One-Click Automatic Setup & Launch (Windows)
+1. Double-click `start_all.bat` (or run `setup.bat` first on a newly cloned laptop).
+2. It automatically checks dependencies, creates `.venv`, installs requirements, runs `npm install`, and opens both servers.
+   - **Frontend UI Dashboard**: [http://localhost:5173](http://localhost:5173)
+   - **Backend API & Swagger**: [http://localhost:8005/docs](http://localhost:8005/docs)
 
 ### Option B: Manual Startup
 
 #### 1. Backend:
 ```bash
 cd backend
+python -m venv .venv
 .venv\Scripts\activate
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8005
 ```
-* Backend API & Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-* Live Video Stream: [http://localhost:8000/api/video_feed](http://localhost:8000/api/video_feed)
+* Backend API & Docs: [http://localhost:8005/docs](http://localhost:8005/docs)
+* Live Video Stream: [http://localhost:8005/api/video_feed](http://localhost:8005/api/video_feed)
 
 #### 2. Frontend:
 ```bash
