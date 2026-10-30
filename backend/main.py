@@ -266,19 +266,19 @@ def get_live_status():
 @app.post("/api/live/connect")
 def connect_live_stream(req: LiveConnectRequest):
     """Manually connects to a verified public RTSP, HLS, or MJPEG stream"""
-    res = pipeline.connect_live_stream(req.url)
-    if not res.get("success"):
-        log_event("WARNING", "LIVE_STREAM", f"Live connect failed for: {req.url} - {res.get('error')}")
-        raise HTTPException(status_code=400, detail=res.get("error", "Failed to connect to stream"))
+    success, msg = pipeline.connect_live_stream(req.url)
+    if not success:
+        log_event("WARNING", "LIVE_STREAM", f"Live connect failed for: {req.url} - {msg}")
+        raise HTTPException(status_code=400, detail=msg)
     log_event("SUCCESS", "LIVE_STREAM", f"Connected to live surveillance stream: {req.url}")
-    return res
+    return {"success": True, "message": msg, "url": req.url, "status": pipeline.get_live_status()}
 
 @app.post("/api/live/disconnect")
 def disconnect_live_stream():
     """Disconnects live stream and returns pipeline to Live Standby Radar mode"""
-    res = pipeline.disconnect_live_stream()
+    pipeline.disconnect_live_stream()
     log_event("INFO", "LIVE_STREAM", "Live stream disconnected. Reverted to Standby Radar Monitor.")
-    return res
+    return {"success": True, "message": "Live stream disconnected", "status": pipeline.get_live_status()}
 
 # ==========================================
 # Mode 2: Recorded Footage 1-Time Analysis
@@ -291,11 +291,12 @@ def get_footage_status():
 @app.post("/api/footage/start")
 def start_footage(req: FootageStartRequest):
     """Starts single-pass 1-time run of specified or loaded footage"""
-    res = pipeline.start_footage_analysis(req.filename)
-    if not res.get("success"):
-        raise HTTPException(status_code=400, detail=res.get("error", "Failed to start footage analysis"))
-    log_event("INFO", "FOOTAGE_ANALYSIS", f"Started 1-time forensic analysis on: {res.get('filename')}")
-    return res
+    success, msg = pipeline.start_footage_analysis(req.filename)
+    if not success:
+        log_event("WARNING", "FOOTAGE_ANALYSIS", f"Footage start failed: {msg}")
+        raise HTTPException(status_code=400, detail=msg)
+    log_event("INFO", "FOOTAGE_ANALYSIS", f"Started 1-time forensic analysis on: {req.filename}")
+    return {"success": True, "message": msg, "filename": req.filename, "status": pipeline.get_footage_status()}
 
 @app.post("/api/footage/pause")
 def pause_footage():
