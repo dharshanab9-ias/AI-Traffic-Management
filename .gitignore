@@ -44,7 +44,9 @@ scratch/
 .system_generated/
 
 # Heavy sample video recordings
-backend/sample_data/
+# Sample video recordings (v1.mp4 bundled for out-of-the-box usage)
+backend/sample_data/*
+!backend/sample_data/v1.mp4
 
 # Scratch scripts
 backend/scratch_*.py

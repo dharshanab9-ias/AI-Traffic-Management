@@ -34,6 +34,11 @@ class VehicleDetector:
             if os.path.exists(p):
                 target_path = p
                 break
+        else:
+            local_nano = os.path.join(base_dir, "yolov8n.pt")
+            if os.path.exists(local_nano):
+                target_path = local_nano
+                print(f"[VehicleDetector] Requested model not found locally; falling back to bundled {local_nano}")
 
         print(f"[VehicleDetector] Loading high-speed model {target_path} on {self.device.upper()}...")
         self.model = YOLO(target_path)
