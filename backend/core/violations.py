@@ -83,7 +83,7 @@ class ViolationDetector:
         signal = signal_states.get(lane_id, "GREEN")
         if signal == "RED" and "Signal Jumping" not in track["violations"] and "pedestrian" not in vclass:
             if len(track["trajectory"]) >= 2:
-                prev_cx, prev_cy = track["trajectory"][-2]
+                prev_cx, prev_cy = track["trajectory"][-2][:2]
                 crossed = False
                 if allowed_dir == "down" and prev_cy <= stop_line_y and cy > stop_line_y:
                     crossed = True
@@ -109,12 +109,15 @@ class ViolationDetector:
                     })
 
         # 2. Wrong-Way Driving (Section 184 MV Act - Dangerous Driving)
-        if "Wrong-Way Driving" not in track["violations"] and len(track["trajectory"]) >= 6 and "pedestrian" not in vclass:
-            dy = cy - track["trajectory"][-5][1]
+        # Requires sustained trajectory vector opposing lane direction over multiple frames
+        if "Wrong-Way Driving" not in track["violations"] and len(track["trajectory"]) >= 8 and "pedestrian" not in vclass and "child" not in vclass:
+            ref_x, ref_y = track["trajectory"][-7][:2]
+            dx = cx - ref_x
+            dy = cy - ref_y
             is_wrong_way = False
-            if allowed_dir == "down" and dy < -16:
+            if allowed_dir == "down" and dy < -30 and abs(dy) > abs(dx):
                 is_wrong_way = True
-            elif allowed_dir == "up" and dy > 16:
+            elif allowed_dir == "up" and dy > 30 and abs(dy) > abs(dx):
                 is_wrong_way = True
 
             if is_wrong_way:
@@ -158,7 +161,7 @@ class ViolationDetector:
         # 4. Two-Wheeler Violations (Helmet & Triple Riding Heuristics)
         if any(k in vclass for k in ["motorcycle", "bike", "two_wheeler"]):
             # Heuristic for helmet check based on vehicle track persistence & speed
-            if "No Helmet" not in track["violations"] and speed > 35.0 and (tid % 5 == 0):
+            if "No Helmet" not in track["violations"] and speed > 45.0 and track.get("rider_no_helmet", False):
                 track["violations"].add("No Helmet")
                 sched = LEGAL_ACT_SCHEDULE["No Helmet"]
                 new_violations.append({

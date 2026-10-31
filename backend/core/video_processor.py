@@ -250,7 +250,11 @@ class VideoPipelineManager:
                     break
 
         if not target_path:
-            target_path = os.path.join(base_sample, "v1.mp4")
+            for pref in ["kaggle_indian_urban_1080p.mp4", "indian_cctv_junction_flow.mp4", "v1.mp4"]:
+                cand = os.path.join(base_sample, pref)
+                if os.path.exists(cand):
+                    target_path = cand
+                    break
 
         with self.cap_lock:
             if self.cap:

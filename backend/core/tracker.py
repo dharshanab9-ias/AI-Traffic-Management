@@ -117,23 +117,20 @@ class VehicleTracker:
 
                 vclass = cd["class_name"].lower()
                 if "pedestrian" in vclass or "child" in vclass:
-                    # Typical pedestrian speed 3.5 - 6.0 km/h
-                    calculated_speed = round(min(8.0, max(2.5, raw_kmh if raw_kmh > 0.5 else 4.0)), 1)
-                elif pixel_disp < 6.0 and f_delta >= 5:
-                    # Vehicle stopped at signal
+                    calculated_speed = round(min(9.0, max(0.5, raw_kmh)), 1)
+                elif pixel_disp < 4.0 and f_delta >= 3:
+                    # Stationary vehicle at red light or in queue
                     calculated_speed = 0.0
                 else:
-                    # Realistic vehicle road speed: 32 - 58 km/h on urban arterial corridors
-                    base_road_speed = 36.0 + (int(tid) % 18)
-                    calculated_speed = round(0.4 * base_road_speed + 0.6 * raw_kmh, 1) if raw_kmh > 15 else round(base_road_speed, 1)
+                    # Authentic physics-derived velocity from pixel displacement
+                    calculated_speed = round(raw_kmh, 1)
 
                 old_speed = self.tracks[tid].get("speed_kmh", calculated_speed)
-                smoothed_speed = round(0.65 * old_speed + 0.35 * calculated_speed, 1)
+                smoothed_speed = round(0.70 * old_speed + 0.30 * calculated_speed, 1)
                 self.tracks[tid]["speed_kmh"] = smoothed_speed
             else:
-                # Initial default based on class
                 vclass = cd["class_name"].lower()
-                self.tracks[tid]["speed_kmh"] = 4.2 if ("pedestrian" in vclass or "child" in vclass) else float(38.0 + (int(tid) % 12))
+                self.tracks[tid]["speed_kmh"] = 4.0 if ("pedestrian" in vclass or "child" in vclass) else 0.0
 
             # Assign lane
             if lanes:
@@ -167,7 +164,7 @@ class VehicleTracker:
             lane_id = self._get_lane(cx, cy, lanes)
 
         vclass = det["class_name"].lower()
-        init_speed = 4.0 if ("pedestrian" in vclass or "child" in vclass) else float(38.0 + (tid % 14))
+        init_speed = 4.0 if ("pedestrian" in vclass or "child" in vclass) else 0.0
 
         self.tracks[tid] = {
             "id": tid,

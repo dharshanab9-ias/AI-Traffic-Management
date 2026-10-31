@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import QuantumBrainView from './components/QuantumBrainView';
 import { 
   Car, 
   AlertTriangle, 
@@ -773,6 +774,7 @@ export default function App() {
       const interval = setInterval(() => {
         fetchFootageStatus();
         fetchCapturedPlates();
+        fetchLiveViolations();
         fetchFootageAuditReport();
       }, 1000);
       return () => clearInterval(interval);
@@ -1525,7 +1527,7 @@ export default function App() {
     { name: "Live Surveillance & Stream", id: "Live Monitoring", icon: Video },
     { name: "Live Violations Feed", id: "Violations", icon: AlertTriangle },
     { name: "Traffic Analytics", id: "Traffic Analytics", icon: Activity },
-    { name: "Dynamic Signals", id: "Signal Control", icon: Radio },
+    { name: "Quantum Brain Grid", id: "Quantum Brain", icon: Cpu },
     { name: "Jurisdictional Map", id: "Map View", icon: Map },
     { name: "Official Reports", id: "Reports", icon: FileText },
     { name: "Settings", id: "Settings", icon: Settings }
@@ -1533,6 +1535,7 @@ export default function App() {
 
   const footageNavItems = [
     { name: "Upload & Repository Footage", id: "Footage Repository", icon: Upload },
+    { name: "Quantum Brain Grid", id: "Quantum Brain", icon: Cpu },
     { name: "Vehicle & Pedestrian Census", id: "Traffic Analytics", icon: Activity },
     { name: "ANPR & Blurry Predictive OCR", id: "ANPR Ledger", icon: Camera },
     { name: "Violations Proof Ledger", id: "Violations", icon: AlertTriangle },
@@ -2036,6 +2039,13 @@ export default function App() {
         {/* ========================================================================= */}
         {/* SCREEN: MODE 1 - LIVE SURVEILLANCE & STREAM CONNECTOR                     */}
         {/* ========================================================================= */}
+        {/* ========================================================================= */}
+        {/* SCREEN: QUANTUM BRAIN & MULTI-JUNCTION GRID SYNCHRONIZER                  */}
+        {/* ========================================================================= */}
+        {(activeTab === "Quantum Brain" || activeTab === "Signal Control") && (
+          <QuantumBrainView apiBase={API_BASE} />
+        )}
+
         {activeTab === "Live Monitoring" && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             
@@ -2339,11 +2349,17 @@ export default function App() {
                 </div>
 
                 {/* Video Image Stream */}
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', backgroundColor: '#070b14' }}>
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', backgroundColor: '#070b14', minHeight: '360px' }}>
                   <img
+                    key={videoFeedKey}
                     src={`${API_BASE}/api/video_feed?t=${videoFeedKey}`}
                     alt="Traffic AI Forensic Live Feed"
                     style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                    onError={(e) => {
+                      setTimeout(() => {
+                        e.target.src = `${API_BASE}/api/feed/current_frame?t=${Date.now()}`;
+                      }, 400);
+                    }}
                   />
                 </div>
 

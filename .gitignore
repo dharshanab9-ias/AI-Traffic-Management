@@ -51,3 +51,5 @@ backend/scratch_*.py
 scratch_*.py
 
 backend/yolov8m.pt
+
+*.pt
