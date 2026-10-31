@@ -2447,15 +2447,15 @@ export default function App() {
                 </div>
               )}
 
-              {/* 27 4K Video Clips Grid */}
+              {/* Authentic Indian CCTV & Kaggle Video Clips Grid */}
               <div>
                 <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '12px', color: '#0f172a' }}>
-                  27 Real 4K Indian CCTV Recordings Repository
+                  Authentic Indian CCTV & Kaggle Traffic Video Repository ({availableFeeds.filter(f => f.type !== 'live_stream').length} Recordings)
                 </h3>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
                   {availableFeeds
-                    .filter(f => f.filename && (f.filename.startsWith('v') || f.filename.includes('indian') || f.filename.includes('madurai') || f.filename.includes('traffic')))
+                    .filter(f => f.type !== 'live_stream')
                     .map((feed) => {
                       const isSelected = activeFeedId === feed.id;
                       return (
@@ -2487,25 +2487,46 @@ export default function App() {
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => handleStartFootageAnalysis(feed.filename)}
-                            style={{
-                              padding: '7px 12px',
-                              borderRadius: '6px',
-                              border: 'none',
-                              backgroundColor: isSelected ? '#0284c7' : '#0f172a',
-                              color: '#ffffff',
-                              fontSize: '11.5px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <Play size={12} /> {isSelected ? "Re-run Analysis" : "Select & Analyze"}
-                          </button>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={() => handleStartFootageAnalysis(feed.filename)}
+                              style={{
+                                flex: 1,
+                                padding: '7px 12px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: isSelected ? '#0284c7' : '#0f172a',
+                                color: '#ffffff',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <Play size={12} /> {isSelected ? "Re-play & Analyze" : "Play & Analyze Live"}
+                            </button>
+                            <button
+                              onClick={() => handleRemoveVideo(feed.filename)}
+                              style={{
+                                padding: '7px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #fee2e2',
+                                backgroundColor: '#fef2f2',
+                                color: '#ef4444',
+                                fontSize: '11.5px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              title="Delete this video"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
